@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elbilsladdning</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        button { margin: 5px; }
+        #statusBox { width: 300px; height: 150px; overflow-y: scroll; border: 1px solid #ccc; padding: 5px; }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+        }
+        .slider {
+            width: 20px; /* Width of the slider */
+            height: 200px; /* Height of the slider */
+            writing-mode: vertical-lr; /* Make slider vertical */
+            direction: rtl; /* Ensure the slider works correctly */
+            margin: 0 10px; /* Space between sliders */
+        }
+        .sliders {
+            display: flex; /* Flex container for side-by-side alignment */
+            justify-content: space-around; /* Space between sliders */
+        }
+        .slider-wrapper {
+            margin-right: 30px; /* Add horizontal space between sliders */
+        }
+    </style>
+</head>
+<body>
+    <h1>Ladda elbilen</h1>
+    <hr>
+    <div class="slider-container">
+      <div class="sliders">
+          <div class="slider-wrapper">
+              <h2>Nuvarande laddning:</h2>
+              <input type="range" id="currentSlider" min="0" max="100" value="40" class="slider" oninput="updateCurrentSliderValue()" onchange="setEnergy()" />
+              <span id="currentSliderValue">40% (54.00 km, 7.20 kWh)</span> <!-- Initial values for km and kWh -->
+          </div>
+          <div class="slider-wrapper">
+              <h2>Önskad laddning:</h2>
+              <input type="range" id="desiredSlider" min="0" max="100" value="70" class="slider" oninput="updateDesiredSliderValue()" onchange="setEnergy()" />
+              <span id="desiredSliderValue">70% (94.50 km, 12.60 kWh)</span> <!-- Initial values for km and kWh -->
+          </div>
+      </div>
+    </div>
+  
+    <hr>
+    <label for="startTime">Select Start Time:</label>
+    <br>
+    <input type="time" id="startTime" />
+    <button onclick="setStartTime()">Set Start Time</button>
+
+    <hr>
+    <h2>Kommandon:</h2>
+    <input type="text" id="messageField" placeholder="Message" />
+    <br>
+    <button onclick="sendMessage('report 2')">Send "report 2"</button>
+    <button onclick="sendMessage('report 3')">Send "report 3"</button>
+    <button onclick="sendMessage('ena 0')">Pause</button>
+
+    <hr>
+    <h2>Statusmeddelanden:</h2>
+    <div id="statusBox"></div>
+
+    <script>
+        const maxEnergy = 22; // max battery capacity
+        const statusBox = document.getElementById('statusBox');
+
+        // Establish WebSocket connection
+        const socket = new WebSocket('ws://localhost:3000/status');
+
+        socket.onmessage = function(event) {
+        const message = event.data;
+        try {
+            const data = (message[0] === '{') ? JSON.parse(message) : message;
+            console.log('data:', data);
+
+            const e = data["E pres"];
+            const energyKWh = (e !== undefined) ? e/10000 : 0;
+
+
+            const loggedMessage = getMessage(data);            
+            const newMessage = document.createElement('div');
+            newMessage.textContent = loggedMessage;
+            statusBox.appendChild(newMessage);
+            statusBox.scrollTop = statusBox.scrollHeight; // Auto-scroll to the bottom
+        } catch (error) {
+            console.error('Error parsing message:', error);
+        }
+    };
+
+        function getMessage(data) {
+          const id = data["ID"];
+          if (id === "2") {
+            const setEnergy = data["Setenergy"] / 10000;
+            const enableUser = data["Enable user"];
+            return `Setenergy: ${setEnergy} kWh, Enable user: ${enableUser}`;
+          }
+          if (id === "3") {
+            const e = data["E pres"] / 10000;
+            const i1 = data["I1"] / 1000;
+            const i2 = data["I2"] / 1000;
+            const i3 = data["I3"] / 1000;
+            return `E: ${e} kWh, I: ${i1}, ${i2}, ${i2} A`;
+          }
+          const e = data["E pres"];
+          if (e !== undefined) {
+            return `E: ${e / 10000} kWh`
+          }
+        }
+
+        function sendMessage(message) {
+            fetch('/send-message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message })
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('messageField').value = message;
+                console.log(data);
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function setStartTime() {
+            const startTime = document.getElementById('startTime').value;
+            fetch('/set-start-time', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ startTime })
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log(data);
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function updateCurrentSliderValue() {
+            const slider = document.getElementById('currentSlider');
+            const valueDisplay = document.getElementById('currentSliderValue');
+            const percentage = slider.value;
+
+            // Calculate kilometers and energy based on the percentage
+            const kilometers = (percentage / 100) * 135;
+            const energyKWh = (percentage / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+            // Update the display
+            valueDisplay.textContent = `${percentage}% (${kilometers.toFixed(2)} km, ${energyKWh.toFixed(2)} kWh)`;
+        }
+
+        function updateDesiredSliderValue() {
+            const slider = document.getElementById('desiredSlider');
+            const valueDisplay = document.getElementById('desiredSliderValue');
+            const percentage = slider.value;
+
+            // Calculate kilometers and energy based on the percentage
+            const kilometers = (percentage / 100) * 135;
+            const energyKWh = (percentage / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+            // Update the display
+            valueDisplay.textContent = `${percentage}% (${kilometers.toFixed(2)} km, ${energyKWh.toFixed(2)} kWh)`;
+        }
+
+        function setEnergy() {
+            const deiredSlider = document.getElementById('desiredSlider');
+            const desiredPercentage = deiredSlider.value;
+            const currentSlider = document.getElementById('currentSlider');
+            const curentPercentage = currentSlider.value;
+            const percentage = (desiredPercentage - curentPercentage);
+            const load = (percentage > 0) ? percentage : 0;
+            const desiredEnergyKWh = (load / 100) * maxEnergy * 10000; // maxEnergy kWh for 100%
+            sendMessage(`setenergy ${desiredEnergyKWh}`)
+        }
+    </script>
+</body>
+</html>
