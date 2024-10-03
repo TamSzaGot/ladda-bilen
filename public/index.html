@@ -27,6 +27,24 @@
         .slider-wrapper {
             margin-right: 30px; /* Add horizontal space between sliders */
         }
+                /* Button Styles */
+        .start-button {
+            background-color: green; /* Green for start */
+        }
+        .stop-button {
+            background-color: red; /* Red for stop */
+        }
+        .current-slider-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .current-slider {
+            width: 200px; /* Adjust as needed for better appearance */
+            height: 20px; /* Set height for a horizontal slider */
+            writing-mode: horizontal-tb; /* Make slider horizontal */
+            margin: 0 10px; /* Space between the slider and labels */
+        }
     </style>
 </head>
 <body>
@@ -48,10 +66,19 @@
     </div>
   
     <hr>
-    <label for="startTime">Select Start Time:</label>
+    <h2>Välj ström:</h2>
+    <div class="current-slider-container">
+        <div class="slider-wrapper">
+            <input type="range" id="currentSliderA" min="13" max="16" value="16" step="0.5" class="current-slider" oninput="updateCurrentAValue()" onchange="sendCurrentCommand()" />
+            <span id="currentSliderAValue">16 A</span>
+        </div>
+    </div>
+
+    <hr>
+    <label for="startTime">Välj starttid:</label>
     <br>
     <input type="time" id="startTime" />
-    <button onclick="setStartTime()">Set Start Time</button>
+    <button onclick="setStartTime()">Sätt starttid</button>
 
     <hr>
     <h2>Kommandon:</h2>
@@ -59,7 +86,8 @@
     <br>
     <button onclick="sendMessage('report 2')">Send "report 2"</button>
     <button onclick="sendMessage('report 3')">Send "report 3"</button>
-    <button onclick="sendMessage('ena 0')">Pause</button>
+    <button class="start-button" onclick="sendMessage('ena 1')">Start</button>
+    <button class="stop-button" onclick="sendMessage('ena 0')">Stopp</button>
 
     <hr>
     <h2>Statusmeddelanden:</h2>
@@ -179,6 +207,18 @@
             const load = (percentage > 0) ? percentage : 0;
             const desiredEnergyKWh = (load / 100) * maxEnergy * 10000; // maxEnergy kWh for 100%
             sendMessage(`setenergy ${desiredEnergyKWh}`)
+        }
+
+        function updateCurrentAValue() {
+            const slider = document.getElementById('currentSliderA');
+            const valueDisplay = document.getElementById('currentSliderAValue');
+            valueDisplay.textContent = `${slider.value} A`;
+        }
+
+        function sendCurrentCommand() {
+            const slider = document.getElementById('currentSliderA');
+            const currentValue = slider.value;
+            sendMessage(`curr ${currentValue * 1000}`);
         }
     </script>
 </body>
