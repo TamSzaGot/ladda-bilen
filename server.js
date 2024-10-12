@@ -12,11 +12,18 @@ const udpSocket = dgram.createSocket('udp4');
 
 // Middleware to serve static files
 app.use(express.static('public'));
+// Serve static files from the public directory
+//app.use(express.static(path.join(__dirname, 'public')));
+
 app.use(express.json());
 
 // Store clients for broadcasting
 const clients = [];
-let startTime = null; // Declare startTime at the top
+let startTime = null;
+let currentCharge1 = null;
+let desiredCharge1 = null;
+let currentCharge2 = null;
+let desiredCharge2 = null;
 
 // Function to send UDP messages
 function sendUdpMessage(message) {
@@ -33,7 +40,8 @@ function sendUdpMessage(message) {
 // Handle incoming UDP messages
 udpSocket.on('message', (msg, rinfo) => {
     const message = msg.toString();
-    console.log(`Received: ${message}`);
+    const timestamp = new Date().toLocaleString('sv-SE');
+    console.log(`${timestamp} Received: ${message}`);
     // Broadcast the message to all connected clients
     clients.forEach(client => {
         client.send(message);
@@ -62,11 +70,74 @@ app.post('/set-start-time', (req, res) => {
   const startDay = date.toISOString().split('T')[0];
 
   startTime = new Date(startDay + 'T' + start);
-  const msg = `Start time set to: ${startTime}`;
+  const msg = `startTime: ${startTime}`;
   console.log(msg);
   res.send(msg);
+  clients.forEach(client => {
+    client.send(msg);
+    });
 });
 
+// API endpoint to get current charge persentage
+app.get('/current-charge1', (req, res) => {
+res.body.currentCharge = currentCharge1; // Returns current charge in integer %
+});
+  
+app.get('/current-charge2', (req, res) => {
+    res.body.currentCharge = currentCharge2; // Returns current charge in integer %
+});
+  
+// API endpoint to set current charge persentage
+app.post('/current-charge1', (req, res) => {
+    currentCharge1 = req.body.currentCharge; // Expecting current charge in integer %
+    const msg = `{"currentCharge1": ${currentCharge1}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
+  
+app.post('/current-charge2', (req, res) => {
+    currentCharge2 = req.body.currentCharge; // Expecting current charge in integer %
+    const msg = `{"currentCharge2": ${currentCharge2}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
+
+// API endpoint to get desired charge persentage
+app.get('/desired-charge1', (req, res) => {
+    res.body.desiredCharge = desiredCharge1; // Returns desired charge in integer %
+});
+  
+app.get('/desired-charge2', (req, res) => {
+    res.body.desiredCharge = desiredCharge2; // Returns desired charge in integer %
+});
+  
+// API endpoint to set desired charge persentage
+app.post('/desired-charge1', (req, res) => {
+    desiredCharge1 = req.body.desiredCharge; // Expecting desired charge in integer %
+    const msg = `{"desiredCharge1": ${desiredCharge1}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
+  
+app.post('/desired-charge2', (req, res) => {
+    desiredCharge2 = req.body.desiredCharge; // Expecting desired charge in integer %
+    const msg = `{"desiredCharge2": ${desiredCharge2}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
+  
 // Create an HTTP server and a WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -97,4 +168,4 @@ setInterval(() => {
         startTime = null; // Reset start time to prevent multiple triggers
       }
   }
-}, 60000); // Check every minute
+}, 10000); // Check every 10 second
