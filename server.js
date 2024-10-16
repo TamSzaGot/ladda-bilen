@@ -19,7 +19,37 @@ app.use(express.json());
 
 // Store clients for broadcasting
 const clients = [];
+const chargerConfig = [
+    {
+        place: 'garage',
+        start: () => sendUdpMessage('ena 1'),
+        stop: () => sendUdpMessage('ena 0')
+    },
+    {
+        place: 'lada',
+        start: () => sendUdpMessage('output 1'),
+        stop: () => sendUdpMessage('output 0')
+    },
+]
+let chargerState = {
+    startTime: null,
+    stopTime: null,
+    connectedCar: [
+        {
+            currentCharge: null,    // percentage
+            desiredCharge: null,    // percentage
+            chargeTime: 0        // minutes
+        },
+        {
+            currentCharge: null,    // percentage
+            desiredCharge: null,    // percentage
+            chargeTime: 0        // minutes
+        },
+    ]
+};
+let currentCharger = 0;
 let startTime = null;
+let stopTime = null;
 let currentCharge1 = null;
 let desiredCharge1 = null;
 let currentCharge2 = null;
@@ -58,8 +88,10 @@ app.post('/send-message', (req, res) => {
 // API endpoint to set the start time
 app.post('/set-start-time', (req, res) => {
   const start = req.body.startTime; // Expecting time in HH:MM format
+  console.log(`start: ${start}`);
   const date = new Date();
   const currentTime = moment().format('HH:mm');
+  console.log(`currentTime: ${currentTime}`);
   if (start < currentTime) {
     // add a day
     console.log(`Add a day.`);
@@ -70,7 +102,7 @@ app.post('/set-start-time', (req, res) => {
   const startDay = date.toISOString().split('T')[0];
 
   startTime = new Date(startDay + 'T' + start);
-  const msg = `startTime: ${startTime}`;
+  const msg = `{"startTime": "${moment(startTime).format('HH:mm')}"}`;
   console.log(msg);
   res.send(msg);
   clients.forEach(client => {
@@ -137,7 +169,32 @@ app.post('/desired-charge2', (req, res) => {
         client.send(msg);
     });
 });
+
+const charginPower = 9.2; kW
+
+app.post('/setenergy1', (req, res) => {
+    const chargingTime = Math.round(req.body.desiredEnergy * 60 / charginPower); // minutes
+    chargerState.connectedCar[0].chargeTime = chargingTime;
+    const msg = `{"chargingTime1": ${chargingTime}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
   
+app.post('/setenergy2', (req, res) => {
+    const chargingTime = Math.round(req.body.desiredEnergy * 60 / charginPower); // minutes
+    chargerState.connectedCar[1].chargeTime = chargingTime;
+    const msg = `{"chargingTime2": ${chargingTime}}`;
+    console.log(msg);
+    res.send(msg);
+    clients.forEach(client => {
+        client.send(msg);
+    });
+});
+  
+
 // Create an HTTP server and a WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -160,12 +217,27 @@ udpSocket.bind(7090);
 
 // Check time every minute
 setInterval(() => {
-  if (startTime) {
-      const now = new Date();
-      if (now >= startTime) {
-        sendUdpMessage("ena 1");
-        //sendUdpMessage("report 2");
-        startTime = null; // Reset start time to prevent multiple triggers
-      }
-  }
-}, 10000); // Check every 10 second
+    if (startTime) {
+        const now = new Date();
+        if (now >= startTime) {
+          const chargingTime = chargerState.connectedCar[currentCharger].chargeTime;
+          stopTime = moment(now).add(chargingTime, 'minutes')
+          if (chargingTime > 0)
+            chargerConfig[currentCharger].start();
+          startTime = null; // Reset start time to prevent multiple triggers
+        }
+    }
+    if (stopTime) {
+        const now = new Date();
+        if (now >= stopTime) {
+            chargerConfig[currentCharger].stop();
+            stopTime = null; // Reset stop time to prevent multiple triggers
+            if (currentCharger < 1) {
+                currentCharger++;
+                startTime = moment(now).add(2, 'minutes')
+            } else {
+                currentCharger = 0;
+            }
+        }
+    }
+  }, 10000); // Check every 10 second

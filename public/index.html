@@ -73,6 +73,7 @@
     <div class="chargers">
         <div class="charger">
             <h3>Ladan</h3>
+            <span id="chargingTime2"></span>
             <div class="slider-container">
                 <div class="sliders">
                     <div class="slider-wrapper">
@@ -96,6 +97,7 @@
         </div>
         <div class="charger">
             <h3>Garaget</h3>
+            <span id="chargingTime1"></span>
             <div class="slider-container">
                 <div class="sliders">
                     <div class="slider-wrapper">
@@ -262,14 +264,19 @@
             document.getElementById('desiredPower2').textContent = `${energyKWh.toFixed(2)} kWh`;
            }
 
-          const startTime1 = data["startTime1"];
-          if (startTime1 !== undefined) {
-            document.getElementById('startTime1').value = startTime1;
-          }
+           const chargingTime1 = data["chargingTime1"];
+           if (chargingTime1 !== undefined) {
+            document.getElementById('chargingTime1').textContent = `${chargingTime1} minuter`;
+           }
 
-          const startTime2 = data["startTime2"];
-          if (startTime2 !== undefined) {
-            document.getElementById('startTime2').value = startTime2;
+           const chargingTime2 = data["chargingTime2"];
+           if (chargingTime2 !== undefined) {
+            document.getElementById('chargingTime2').textContent = `${chargingTime2} minuter`;
+           }
+
+          startTime = data["startTime"];
+          if (startTime !== undefined) {
+            document.getElementById('startTime').value = startTime;
           }
 
           const e = data["E pres"];
@@ -278,7 +285,7 @@
           }
         }
 
-        function sendMessage(message) {
+        function sendMessage(message) { 
             fetch('/send-message', {
                 method: 'POST',
                 headers: {
@@ -294,7 +301,7 @@
             .catch(error => console.error('Error:', error));
         }
 
-        function setStartTime(charger) {
+        function setStartTime() {
             const startTime = document.getElementById(`startTime`).value;
             fetch(`/set-start-time`, {
                 method: 'POST',
@@ -374,7 +381,22 @@
             const percentage = (desiredPercentage - curentPercentage);
             const load = (percentage > 0) ? percentage : 0;
             const desiredEnergyKWh = (load / 100) * maxEnergy * 10000; // maxEnergy kWh for 100%
-            sendMessage(`setenergy ${desiredEnergyKWh}`)
+            if (charger === 1) {
+                sendMessage(`setenergy ${desiredEnergyKWh}`)
+            }
+            fetch(`/setenergy${charger}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ desiredEnergy: desiredEnergyKWh })
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('messageField').value = data;
+                console.log(data);
+            })
+            .catch(error => console.error('Error:', error));
         }
 
         function updateCurrentAValue() {
