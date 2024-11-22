@@ -7,15 +7,9 @@ const moment = require('moment'); // For date/time manipulation
 const app = express();
 const port = 3000;
 
-// Create a UDP socket
-const udpSocket = dgram.createSocket('udp4');
+const chargerIp = '192.168.1.79';
 
-// Middleware to serve static files
-app.use(express.static('public'));
-// Serve static files from the public directory
-//app.use(express.static(path.join(__dirname, 'public')));
-
-app.use(express.json());
+const POWER_LIMIT = 14 // kW
 
 // Store clients for broadcasting
 const clients = [];
@@ -55,21 +49,125 @@ let desiredCharge1 = null;
 let currentCharge2 = null;
 let desiredCharge2 = null;
 
+
+// Create a UDP socket
+const udpSocket = dgram.createSocket('udp4');
+
+// Home Manager 2.0
+const MULTICAST_ADDR = '239.12.255.254';
+const MULTICAST_PORT = 9522;
+
+let currentCurrentReduction = 0;
+
+const server2 = dgram.createSocket({'type' : 'udp4', 'reuseAddr' : true});
+
+// Join the multicast group
+server2.on('listening', () => {
+  const address = server2.address();
+  console.log(`Listening on ${address.address}:${address.port}`);
+  server2.addMembership(MULTICAST_ADDR);
+});
+
+function roundHalf(num) {
+    return Math.round(num*2)/2;
+}
+
+// Handle incoming UDP messages
+server2.on('message', (msg, rinfo) => {
+  //console.log(`Received message from ${rinfo.address}:${rinfo.port}`);
+  //console.log(msg);
+  try {
+    const length = msg.length;
+
+    if ( length === 608) {
+        const meter = msg.readUInt32BE(28);
+        const consumption = msg.readUInt32BE(32);
+        //const solarGeneration = msg.readUInt16BE(2);  // Example for solar generation
+        
+        if ( meter == 66560) {
+            const power = consumption / 10000;
+            // console.log(`Meter: ${meter} Consumption: ${power} kW`);
+            const currentReduction = (power > POWER_LIMIT) ? roundHalf(0.69286 * (power - POWER_LIMIT)) : 0; // A
+            if ( currentReduction !== currentCurrentReduction) {
+                currentCurrentReduction = currentReduction;
+                const setCurrent = 16 - currentReduction;
+                if (currentCharger == 0) { // Garage
+                    console.log(`Set current: ${setCurrent} A`);
+                    sendUdpMessage(`curr ${setCurrent * 1000}`);
+                } else { // Lada
+                    const charge = (setCurrent === 16) ? 1 : 0;
+                    console.log(`Set current: ${charge * 16} A`);
+                    sendUdpMessage(`output ${charge}`);
+                }
+            }
+         }
+        //console.log(`Solar Generation: ${solarGeneration} W`);
+    }
+  } catch (err) {
+    console.log('Error parsing data:', err);
+  }
+});
+
+// Handle errors
+server2.on('error', (err) => {
+  console.log(`Server error:\n${err.stack}`);
+  server2.close();
+});
+
+// Bind to the UDP port and listen for packets
+server2.bind(MULTICAST_PORT, () => {
+  console.log(`Server is bound to port ${MULTICAST_PORT}`);
+});
+
+
+// Middleware to serve static files
+app.use(express.static('public'));
+// Serve static files from the public directory
+//app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(express.json());
+
+let waitingForAck = false;
+
+// Function to resend command until TCH-OK have been received
+function resendUdpMessageUntilAck(message){
+   var timer = setTimeout(function(){
+        if (!waitingForAck) {
+            clearTimeout(timer);
+//            console.log(`cleared timeout ...`);
+        } else {
+            sendUdpMessage(message);
+        }
+    }, 1000);
+} 
+
 // Function to send UDP messages
 function sendUdpMessage(message) {
+    if (['ena 0','ena 1','output 0','output 1', 'curr '].includes(message)) {
+        if (!waitingForAck) {
+            waitingForAck = true;
+//            console.log(`resendUdpMessageUntilAck ...`);
+            resendUdpMessageUntilAck(message);
+//            console.log(`resendUdpMessageUntilAck done.`);
+         }
+    }
     const messageBuffer = Buffer.from(message);
-    udpSocket.send(messageBuffer, 0, messageBuffer.length, 7090, '192.168.11.146', (err) => {
+    udpSocket.send(messageBuffer, 0, messageBuffer.length, 7090, chargerIp, (err) => {
         if (err) {
             console.error('Error sending UDP message:', err);
         } else {
-            console.log(`Sent: ${message}`);
-        }
+            const timestamp = new Date().toLocaleString('sv-SE');
+            console.log(`${timestamp} Sent: ${message}`);
+       }
     });
 }
 
 // Handle incoming UDP messages
 udpSocket.on('message', (msg, rinfo) => {
     const message = msg.toString();
+    if (message.startsWith('TCH-OK :done')) {
+        waitingForAck = false;
+    }
     const timestamp = new Date().toLocaleString('sv-SE');
     console.log(`${timestamp} Received: ${message}`);
     // Broadcast the message to all connected clients
@@ -170,7 +268,7 @@ app.post('/desired-charge2', (req, res) => {
     });
 });
 
-const charginPower = 9.2; kW
+const charginPower = 9.2; //kW
 
 app.post('/setenergy1', (req, res) => {
     const chargingTime = Math.round(req.body.desiredEnergy * 60 / charginPower); // minutes
@@ -222,14 +320,17 @@ setInterval(() => {
         if (now >= startTime) {
           const chargingTime = chargerState.connectedCar[currentCharger].chargeTime;
           stopTime = moment(now).add(chargingTime, 'minutes')
-          if (chargingTime > 0)
+          if (chargingTime > 0) {
+            console.log(`${now.toTimeString()} Start charging ${chargerConfig[currentCharger].place}`);
             chargerConfig[currentCharger].start();
+          }
           startTime = null; // Reset start time to prevent multiple triggers
         }
     }
     if (stopTime) {
         const now = new Date();
         if (now >= stopTime) {
+            console.log(`${now.toTimeString()} Stop charging ${chargerConfig[currentCharger].place}`);
             chargerConfig[currentCharger].stop();
             stopTime = null; // Reset stop time to prevent multiple triggers
             if (currentCharger < 1) {

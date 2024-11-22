@@ -79,14 +79,14 @@
                     <div class="slider-wrapper">
                       <h4>Nuvarande</h4>
                       <span id="currentPercentage2">40%</span>
-                      <input type="range" id="currentSlider2" min="0" max="100" value="40" class="slider" oninput="updateCurrentSliderValue(2)" />
+                      <input type="range" id="currentSlider2" min="0" max="100" value="40" class="slider" oninput="updateCurrentSliderValue(2)" onchange="setEnergy(2)" />
                       <span id="currentRange2">54.00 km</span>
                       <span id="currentPower2">7.20 kWh</span>
                   </div>
                   <div class="slider-wrapper">
                       <h4>Önskad</h4>
                       <span id="desiredPercentage2">70%</span>
-                      <input type="range" id="desiredSlider2" min="0" max="100" value="70" class="slider" oninput="updateDesiredSliderValue(2)" />
+                      <input type="range" id="desiredSlider2" min="0" max="100" value="70" class="slider" oninput="updateDesiredSliderValue(2)" onchange="setEnergy(2)" />
                       <span id="desiredRange2">94.50 km</span>
                       <span id="desiredPower2">15.40 kWh</span>
                   </div>
@@ -148,11 +148,14 @@
     </div>
 
     <script>
-        const maxEnergy = 22; // max battery capacity
+        const maxEnergy = 26.69; // max charging energy
         const statusBox = document.getElementById('statusBox');
+        let enableUser;
+        let state = 1;
+        let plug = 3;
 
         // Establish WebSocket connection
-        const socket = new WebSocket('ws://192.168.11.131:3000/status');
+        const socket = new WebSocket('ws://192.168.1.154:3000/status');
 
         socket.onmessage = function(event) {
             const message = event.data;
@@ -175,12 +178,115 @@
         };
 
         function getMessage(data) {
-          const id = data["ID"];
-          if (id === "2") {
-            const setEnergy = data["Setenergy"] / 10000;
-            const enableUser = data["Enable user"];
-            const plug = data["Plug"];
-            const state = data["State"];
+            const id = data["ID"];
+            if (id === "2") {
+                const setEnergy = data["Setenergy"] / 10000;
+                enableUser = data["Enable user"];
+                plug = data["Plug"];
+                state = data["State"];
+                updatePlugimage();
+                return `Setenergy: ${setEnergy} kWh, Enable user: ${enableUser}`;
+            }
+            if (id === "3") {
+                const e = data["E pres"] / 10000;
+                const i1 = data["I1"] / 1000;
+                const i2 = data["I2"] / 1000;
+                const i3 = data["I3"] / 1000;
+                return `E: ${e} kWh, I: ${i1}, ${i2}, ${i2} A`;
+            }
+            const currentCharge1 = data["currentCharge1"];
+            if (currentCharge1 !== undefined) {
+                const currentSlider1 = document.getElementById('currentSlider1');
+                const currentSliderValue1 = document.getElementById('currentSliderValue1');
+                currentSlider1.value = currentCharge1;
+                // Calculate kilometers and energy based on the percentage
+                const kilometers = (currentCharge1 / 100) * 135;
+                const energyKWh = (currentCharge1 / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+                // Update the display
+                document.getElementById('currentPercentage1').textContent = `${currentCharge1}%`;
+                document.getElementById('currentRange1').textContent = `${kilometers.toFixed(2)} km`;
+                document.getElementById('currentPower1').textContent = `${energyKWh.toFixed(2)} kWh`;
+            }
+            const currentCharge2 = data["currentCharge2"];
+            if (currentCharge2 !== undefined) {
+                const currentSlider2 = document.getElementById('currentSlider2');
+                const currentSliderValue2 = document.getElementById('currentSliderValue2');
+                currentSlider2.value = currentCharge2;
+                // Calculate kilometers and energy based on the percentage
+                const kilometers = (currentCharge2 / 100) * 135;
+                const energyKWh = (currentCharge2 / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+                // Update the display
+                document.getElementById('currentPercentage2').textContent = `${currentCharge2}%`;
+                document.getElementById('currentRange2').textContent = `${kilometers.toFixed(2)} km`;
+                document.getElementById('currentPower2').textContent = `${energyKWh.toFixed(2)} kWh`;
+            }
+
+            const desiredCharge1 = data["desiredCharge1"];
+            if (desiredCharge1 !== undefined) {
+                const desiredSlider1 = document.getElementById('desiredSlider1');
+                const desiredSliderValue1 = document.getElementById('desiredSliderValue1');
+                desiredSlider1.value = desiredCharge1;
+                // Calculate kilometers and energy based on the percentage
+                const kilometers = (desiredCharge1 / 100) * 135;
+                const energyKWh = (desiredCharge1 / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+                // Update the display
+                document.getElementById('desiredPercentage1').textContent = `${desiredCharge1}%`;
+                document.getElementById('desiredRange1').textContent = `${kilometers.toFixed(2)} km`;
+                document.getElementById('desiredPower1').textContent = `${energyKWh.toFixed(2)} kWh`;
+            }
+
+            const desiredCharge2 = data["desiredCharge2"];
+            if (desiredCharge2 !== undefined) {
+                const desiredSlider2 = document.getElementById('desiredSlider2');
+                const desiredSliderValue2 = document.getElementById('desiredSliderValue2');
+                desiredSlider2.value = desiredCharge2;
+                // Calculate kilometers and energy based on the percentage
+                const kilometers = (desiredCharge2 / 100) * 135;
+                const energyKWh = (desiredCharge2 / 100) * maxEnergy; // maxEnergy kWh for 100%
+
+                // Update the display
+                document.getElementById('desiredPercentage2').textContent = `${desiredCharge2}%`;
+                document.getElementById('desiredRange2').textContent = `${kilometers.toFixed(2)} km`;
+                document.getElementById('desiredPower2').textContent = `${energyKWh.toFixed(2)} kWh`;
+            }
+
+            const chargingTime1 = data["chargingTime1"];
+            if (chargingTime1 !== undefined) {
+                document.getElementById('chargingTime1').textContent = `${chargingTime1} minuter`;
+            }
+
+            const chargingTime2 = data["chargingTime2"];
+            if (chargingTime2 !== undefined) {
+                document.getElementById('chargingTime2').textContent = `${chargingTime2} minuter`;
+            }
+
+            startTime = data["startTime"];
+            if (startTime !== undefined) {
+                document.getElementById('startTime').value = startTime;
+            }
+
+            const e = data["E pres"];
+            if (e !== undefined) {
+                return `E: ${e / 10000} kWh`
+            }
+            const _plug = data["Plug"];
+            if (_plug !== undefined) {
+                plug = _plug;
+                updatePlugimage();
+                return `Plug: ${plug}`;
+            }
+            const _state = data["State"];
+            if (_state !== undefined) {
+                state = _state;
+                updatePlugimage();
+                return `State: ${state}`;
+            }
+        }
+
+        function updatePlugimage() {
             const plugImage = document.getElementById('plugImage');
             if (state === 3) {
                 plugImage.src = '/images/charging.png';
@@ -195,94 +301,6 @@
             } else {
                 plugImage.src = '';
             }
-
-            return `Setenergy: ${setEnergy} kWh, Enable user: ${enableUser}`;
-          }
-          if (id === "3") {
-            const e = data["E pres"] / 10000;
-            const i1 = data["I1"] / 1000;
-            const i2 = data["I2"] / 1000;
-            const i3 = data["I3"] / 1000;
-            return `E: ${e} kWh, I: ${i1}, ${i2}, ${i2} A`;
-          }
-          const currentCharge1 = data["currentCharge1"];
-          if (currentCharge1 !== undefined) {
-            const currentSlider1 = document.getElementById('currentSlider1');
-            const currentSliderValue1 = document.getElementById('currentSliderValue1');
-            currentSlider1.value = currentCharge1;
-            // Calculate kilometers and energy based on the percentage
-            const kilometers = (currentCharge1 / 100) * 135;
-            const energyKWh = (currentCharge1 / 100) * maxEnergy; // maxEnergy kWh for 100%
-
-            // Update the display
-            document.getElementById('currentPercentage1').textContent = `${currentCharge1}%`;
-            document.getElementById('currentRange1').textContent = `${kilometers.toFixed(2)} km`;
-            document.getElementById('currentPower1').textContent = `${energyKWh.toFixed(2)} kWh`;
-          }
-          const currentCharge2 = data["currentCharge2"];
-          if (currentCharge2 !== undefined) {
-            const currentSlider2 = document.getElementById('currentSlider2');
-            const currentSliderValue2 = document.getElementById('currentSliderValue2');
-            currentSlider2.value = currentCharge2;
-            // Calculate kilometers and energy based on the percentage
-            const kilometers = (currentCharge2 / 100) * 135;
-            const energyKWh = (currentCharge2 / 100) * maxEnergy; // maxEnergy kWh for 100%
-
-            // Update the display
-            document.getElementById('currentPercentage2').textContent = `${currentCharge2}%`;
-            document.getElementById('currentRange2').textContent = `${kilometers.toFixed(2)} km`;
-            document.getElementById('currentPower2').textContent = `${energyKWh.toFixed(2)} kWh`;
-          }
-
-          const desiredCharge1 = data["desiredCharge1"];
-          if (desiredCharge1 !== undefined) {
-            const desiredSlider1 = document.getElementById('desiredSlider1');
-            const desiredSliderValue1 = document.getElementById('desiredSliderValue1');
-            desiredSlider1.value = desiredCharge1;
-            // Calculate kilometers and energy based on the percentage
-            const kilometers = (desiredCharge1 / 100) * 135;
-            const energyKWh = (desiredCharge1 / 100) * maxEnergy; // maxEnergy kWh for 100%
-
-            // Update the display
-            document.getElementById('desiredPercentage1').textContent = `${desiredCharge1}%`;
-            document.getElementById('desiredRange1').textContent = `${kilometers.toFixed(2)} km`;
-            document.getElementById('desiredPower1').textContent = `${energyKWh.toFixed(2)} kWh`;
-           }
-
-           const desiredCharge2 = data["desiredCharge2"];
-          if (desiredCharge2 !== undefined) {
-            const desiredSlider2 = document.getElementById('desiredSlider2');
-            const desiredSliderValue2 = document.getElementById('desiredSliderValue2');
-            desiredSlider2.value = desiredCharge2;
-            // Calculate kilometers and energy based on the percentage
-            const kilometers = (desiredCharge2 / 100) * 135;
-            const energyKWh = (desiredCharge2 / 100) * maxEnergy; // maxEnergy kWh for 100%
-
-            // Update the display
-            document.getElementById('desiredPercentage2').textContent = `${desiredCharge2}%`;
-            document.getElementById('desiredRange2').textContent = `${kilometers.toFixed(2)} km`;
-            document.getElementById('desiredPower2').textContent = `${energyKWh.toFixed(2)} kWh`;
-           }
-
-           const chargingTime1 = data["chargingTime1"];
-           if (chargingTime1 !== undefined) {
-            document.getElementById('chargingTime1').textContent = `${chargingTime1} minuter`;
-           }
-
-           const chargingTime2 = data["chargingTime2"];
-           if (chargingTime2 !== undefined) {
-            document.getElementById('chargingTime2').textContent = `${chargingTime2} minuter`;
-           }
-
-          startTime = data["startTime"];
-          if (startTime !== undefined) {
-            document.getElementById('startTime').value = startTime;
-          }
-
-          const e = data["E pres"];
-          if (e !== undefined) {
-            return `E: ${e / 10000} kWh`
-          }
         }
 
         function sendMessage(message) { 
@@ -380,9 +398,9 @@
             const curentPercentage = currentSlider.value;
             const percentage = (desiredPercentage - curentPercentage);
             const load = (percentage > 0) ? percentage : 0;
-            const desiredEnergyKWh = (load / 100) * maxEnergy * 10000; // maxEnergy kWh for 100%
+            const desiredEnergyKWh = (load / 100) * maxEnergy; // maxEnergy kWh for 100%
             if (charger === 1) {
-                sendMessage(`setenergy ${desiredEnergyKWh}`)
+                sendMessage(`setenergy ${desiredEnergyKWh * 10000}`)
             }
             fetch(`/setenergy${charger}`, {
                 method: 'POST',
